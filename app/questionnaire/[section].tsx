@@ -7,8 +7,11 @@ import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { RadioButton } from '../../components/RadioButton';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 
-// Define all sections and their fields
+
+
+
 const SECTIONS = {
   1: {
     title: 'SECTION 1 — BASIC RISK FACTORS',
@@ -69,7 +72,6 @@ const SECTIONS = {
   },
 };
 
-// Store answers globally (in production, use AsyncStorage or context)
 const globalAnswers: Record<string, any> = {};
 
 export default function QuestionnaireScreen() {
@@ -79,11 +81,10 @@ export default function QuestionnaireScreen() {
   const router = useRouter();
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
-
+  const { username, isAuthenticated } = useAuth();
   const currentSection = SECTIONS[sectionNum as keyof typeof SECTIONS];
   const progress = ((sectionNum - 1) / 4) * 100;
-
-  // Load existing answers for this section
+  
   useEffect(() => {
     const sectionAnswers: Record<string, any> = {};
     currentSection.fields.forEach(field => {
@@ -95,7 +96,6 @@ export default function QuestionnaireScreen() {
   }, [sectionNum, currentSection.fields]);
 
   const handleNext = async () => {
-    // Validate all fields are filled
     const allFilled = currentSection.fields.every(field => {
       const answer = answers[field.key];
       if (currentSection.type === 'numeric') {
@@ -109,7 +109,6 @@ export default function QuestionnaireScreen() {
       return;
     }
 
-    // Save answers
     Object.keys(answers).forEach(key => {
       globalAnswers[key] = answers[key];
     });
@@ -117,11 +116,47 @@ export default function QuestionnaireScreen() {
     if (sectionNum < 5) {
       router.push(`/questionnaire/${sectionNum + 1}`);
     } else {
-      // Calculate final score
       setLoading(true);
+
       const score = calculateRiskScore(globalAnswers);
       const category = getRiskCategory(score);
-      
+
+      const questionnaireResponse = buildQuestionnaireResponse(globalAnswers);
+
+      try {
+        if (!isAuthenticated || !username) {
+          Alert.alert("Not logged in", "Please log in before submitting the questionnaire.");
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch("http://192.168.1.7:4000/api/questionnaire", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: username,
+            email: `${username}@cognitosense.local`,
+            questionnaireResponse,
+            totalScore: score,
+            targetClass:
+              category === "risk_low" ? 0 :
+              category === "risk_moderate" ? 1 :
+              category === "risk_high" ? 2 : 3,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Server error");
+        }
+      } catch (error) {
+        Alert.alert(
+          "Network Error",
+          "Could not save your response. Please make sure the backend is running."
+        );
+        setLoading(false);
+        return;
+      }
+
       setTimeout(() => {
         setLoading(false);
         router.replace({
@@ -133,7 +168,6 @@ export default function QuestionnaireScreen() {
   };
 
   const handleBack = () => {
-    // Save current answers before going back
     Object.keys(answers).forEach(key => {
       globalAnswers[key] = answers[key];
     });
@@ -147,10 +181,7 @@ export default function QuestionnaireScreen() {
   return (
     <View style={styles.container}>
       <Background />
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <Card>
           <View style={styles.header}>
             <Text style={styles.title}>{t('title')}</Text>
@@ -158,46 +189,35 @@ export default function QuestionnaireScreen() {
           </View>
 
           <View style={styles.body}>
-            {/* Progress Bar */}
             <View style={styles.progressWrap}>
               <View style={[styles.progress, { width: `${progress}%` }]} />
             </View>
 
-            {/* Section Title */}
             <Text style={styles.sectionTitle}>{currentSection.title}</Text>
 
-            {/* Questions */}
-            {currentSection.type === 'numeric' ? (
-              currentSection.fields.map((field) => (
-                <Input
-                  key={field.key}
-                  label={field.label}
-                  value={answers[field.key]?.toString() || ''}
-                  onChangeText={(val) => updateAnswer(field.key, val)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                />
-              ))
-            ) : (
-              currentSection.fields.map((field) => (
-                <RadioButton
-                  key={field.key}
-                  label={field.label}
-                  value={answers[field.key]}
-                  onChange={(val) => updateAnswer(field.key, val)}
-                />
-              ))
-            )}
+            {currentSection.type === 'numeric'
+              ? currentSection.fields.map((field) => (
+                  <Input
+                    key={field.key}
+                    label={field.label}
+                    value={answers[field.key]?.toString() || ''}
+                    onChangeText={(val) => updateAnswer(field.key, val)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                ))
+              : currentSection.fields.map((field) => (
+                  <RadioButton
+                    key={field.key}
+                    label={field.label}
+                    value={answers[field.key]}
+                    onChange={(val) => updateAnswer(field.key, val)}
+                  />
+                ))}
 
-            {/* Navigation Buttons */}
             <View style={styles.buttons}>
               {sectionNum > 1 && (
-                <Button
-                  title={t('back')}
-                  onPress={handleBack}
-                  style={{ flex: 1 }}
-                  muted
-                />
+                <Button title={t('back')} onPress={handleBack} style={{ flex: 1 }} muted />
               )}
               <Button
                 title={sectionNum === 5 ? t('submit') : t('next')}
@@ -211,6 +231,49 @@ export default function QuestionnaireScreen() {
       </ScrollView>
     </View>
   );
+}
+
+// ✅ BUILD NESTED QUESTIONNAIRE SET
+function buildQuestionnaireResponse(allAnswers: Record<string, any>) {
+  return {
+    section_1: {
+      age: Number(allAnswers.age),
+      sleep_hours: Number(allAnswers.sleep_hours),
+      exercise_days: Number(allAnswers.exercise_days),
+      family_dementia: Number(allAnswers.family_dementia),
+      long_term_diseases: Number(allAnswers.long_term_diseases),
+      medications_daily: Number(allAnswers.medications_daily),
+      forgotten_times: Number(allAnswers.forgotten_times),
+      falls_past_year: Number(allAnswers.falls_past_year),
+    },
+    section_2: {
+      smoke: !!allAnswers.smoke,
+      drink: !!allAnswers.drink,
+      diabetes: !!allAnswers.diabetes,
+      high_bp: !!allAnswers.high_bp,
+      high_cholesterol: !!allAnswers.high_cholesterol,
+      history_stroke: !!allAnswers.history_stroke,
+    },
+    section_3: {
+      forget_recent: !!allAnswers.forget_recent,
+      misplace_objects: !!allAnswers.misplace_objects,
+      confused_dates: !!allAnswers.confused_dates,
+      trouble_instructions: !!allAnswers.trouble_instructions,
+      difficult_concentrate: !!allAnswers.difficult_concentrate,
+      word_finding: !!allAnswers.word_finding,
+      get_lost: !!allAnswers.get_lost,
+    },
+    section_4: {
+      mood_changes: !!allAnswers.mood_changes,
+      feel_irritable: !!allAnswers.feel_irritable,
+      others_noticed_change: !!allAnswers.others_noticed_change,
+    },
+    section_5: {
+      need_help_daily: !!allAnswers.need_help_daily,
+      forget_meals_meds: !!allAnswers.forget_meals_meds,
+      struggle_money: !!allAnswers.struggle_money,
+    },
+  };
 }
 
 // Risk calculation algorithm

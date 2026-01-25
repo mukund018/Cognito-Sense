@@ -739,32 +739,32 @@
         const metrics = computeMetrics();
 
         const payload = {
-          user_id: "USER_001", // later replace with real user id
-          game_type: "eye_tracking_saccade",
-          session_id: crypto.randomUUID(),
-          metrics: metrics,
-          trials: experimentResults, // raw trial data
-          timestamp: new Date().toISOString(),
+          userId: "abc", // MUST match CSV user_id
+          eyeTrackingResult: {
+            metrics,
+            trials: experimentResults,
+            timestamp: new Date().toISOString(),
+          },
         };
+
+        console.log("📤 Sending eye tracking payload:", payload);
 
         try {
           const response = await fetch(
-            "http://localhost:4000/api/game-results",
+            "http://192.168.1.4:4000/api/eye-tracking",
             {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             },
           );
 
           const result = await response.json();
-          console.log("✅ Data sent successfully:", result);
-          alert("✅ Results sent to backend successfully!");
-        } catch (error) {
-          console.error("❌ API Error:", error);
-          alert("❌ Failed to send results to backend.");
+          console.log("✅ Backend response:", result);
+          alert("✅ Eye tracking saved!");
+        } catch (err) {
+          console.error("❌ API error:", err);
+          alert("❌ Failed to send data");
         }
       }
 

@@ -5,18 +5,20 @@ import { stringify } from "csv-stringify/sync";
 
 const CSV_PATH = path.join(__dirname, "../../data/cognito_sense_master.csv");
 
-const HEADERS = [
+export const HEADERS = [
   "user_id",
   "email",
   "name",
   "questionnaire_response",
   "games_response",
+  "eye_tracking_response", // ✅ NEW
   "q_total_score",
   "target_risk_class",
   "q_completed_at",
   "created_at",
   "last_updated",
 ];
+
 
 function ensureCSV() {
   if (!fs.existsSync(CSV_PATH)) {
@@ -112,4 +114,25 @@ export function saveGameResult(params: {
   row.last_updated = now;
 
   writeRows(rows);
+}
+
+/* ================= EYE-TRACKING ================= */
+
+export function updateEyeTrackingCSV(userId: string, eyeTrackingResult: any) {
+  const rows = readRows(); // ✅ use your existing parser
+  const now = new Date().toISOString();
+
+  const row = rows.find((r) => r.user_id === userId);
+
+  if (!row) {
+    console.log("❌ User not found in CSV:", userId);
+    return;
+  }
+
+  row.eye_tracking_response = JSON.stringify(eyeTrackingResult);
+  row.last_updated = now;
+
+  writeRows(rows); // ✅ safe stringify
+
+  console.log("✅ Eye tracking data written to CSV");
 }

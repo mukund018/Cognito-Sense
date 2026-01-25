@@ -1,3 +1,4 @@
+import { useAuth } from "../../../context/AuthContext";
 import React, { useEffect, useRef, useState } from 'react';
 import Confetti from 'react-confetti';
 import {
@@ -48,30 +49,30 @@ const shuffle = (arr: any[]) => [...arr].sort(() => Math.random() - 0.5);
 
 const getImageSource = (img: any) => (typeof img === 'string' ? { uri: img } : img);
 
-const downloadCSV = (rows: LevelMetrics[]) => {
-  if (typeof document === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') {
-    console.warn('CSV download not supported on this platform.');
-    return;
-  }
+// const downloadCSV = (rows: LevelMetrics[]) => {
+//   if (typeof document === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') {
+//     console.warn('CSV download not supported on this platform.');
+//     return;
+//   }
 
-  const header = Object.keys(rows[0]).join(',');
-  const body = rows
-    .map(r =>
-      Object.values(r)
-        .map(v => `"${Array.isArray(v) ? v.join(' | ') : v}"`)
-        .join(',')
-    )
-    .join('\n');
+//   const header = Object.keys(rows[0]).join(',');
+//   const body = rows
+//     .map(r =>
+//       Object.values(r)
+//         .map(v => `"${Array.isArray(v) ? v.join(' | ') : v}"`)
+//         .join(',')
+//     )
+//     .join('\n');
 
-  const csv = header + '\n' + body;
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
+//   const csv = header + '\n' + body;
+//   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+//   const url = URL.createObjectURL(blob);
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'shopping_list_recall_report.csv';
-  a.click();
-};
+//   const a = document.createElement('a');
+//   a.href = url;
+//   a.download = 'shopping_list_recall_report.csv';
+//   a.click();
+// };
 
 /* ---------------- COMPONENT ---------------- */
 
@@ -87,6 +88,8 @@ export default function ShoppingListRecall({ onBack }: { onBack: () => void }) {
   const [lastWrong, setLastWrong] = useState(0);
   const [hintItem, setHintItem] = useState<any | null>(null);
   const [hintUses, setHintUses] = useState(0);
+  const { username, isAuthenticated } = useAuth();
+
 
   const startTime = useRef(0);
   const lastClick = useRef(0);
@@ -177,6 +180,67 @@ export default function ShoppingListRecall({ onBack }: { onBack: () => void }) {
     if (level === 5) setPhase('final');
     else setLevel(l => l + 1);
   };
+
+  async function submitShoppingListResult() {
+    if (!isAuthenticated || !username || allMetrics.current.length === 0) {
+      console.warn("Skipping Shopping List Recall logging");
+      return;
+    }
+
+    const levels = allMetrics.current.length;
+
+    const avgAccuracy =
+      allMetrics.current.reduce((s, l) => s + l.correctCount / l.itemsShown.length, 0) /
+      levels;
+
+    const avgRecallTime =
+      allMetrics.current.reduce((s, l) => s + l.recallTimeMs, 0) / levels;
+
+    const avgReactionTime =
+      allMetrics.current.reduce((s, l) => {
+        if (l.reactionTimes.length === 0) return s;
+        const avg = l.reactionTimes.reduce((a, b) => a + b, 0) / l.reactionTimes.length;
+        return s + avg;
+      }, 0) / levels;
+
+    const totalErrors = allMetrics.current.reduce(
+      (s, l) => s + l.distractorErrors,
+      0,
+    );
+
+    const hintUsageRate =
+      allMetrics.current.filter(l => l.hintUses > 0).length / levels;
+
+    try {
+      await fetch("http://192.168.1.4:4000/api/game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: username,
+          gameKey: "shopping_list_recall",
+          gameResult: {
+            total_levels: levels,
+            avg_accuracy: Number((avgAccuracy * 100).toFixed(3)),
+            avg_recall_time_ms: Number(avgRecallTime.toFixed(2)),
+            avg_reaction_time_ms: Number(avgReactionTime.toFixed(2)),
+            total_errors: totalErrors,
+            hint_usage_rate: Number(hintUsageRate.toFixed(3)),
+            completed: true,
+          },
+        }),
+      });
+
+      console.log("✅ Shopping List Recall result saved");
+    } catch (err) {
+      console.error("❌ Failed to save Shopping List Recall result", err);
+    }
+  }
+  useEffect(() => {
+    if (phase === "final") {
+      submitShoppingListResult();
+    }
+  }, [phase]);
+
 
   /* ---------------- UI ---------------- */
 
@@ -288,12 +352,12 @@ export default function ShoppingListRecall({ onBack }: { onBack: () => void }) {
 
             <Text style={styles.subtitle}>🏆 Game Completed!</Text>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.btn}
               onPress={() => downloadCSV(allMetrics.current)}
             >
               <Text style={styles.btnText}>Download CSV Report</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         )}
       </ScrollView>

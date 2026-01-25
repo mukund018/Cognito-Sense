@@ -11,12 +11,14 @@ import { useAuth } from '../../context/AuthContext';
 
 
 
+type SectionType = 'numeric' | 'yesno' | 'mixed';
 
 const SECTIONS = {
   1: {
     title: 'SECTION 1 — BASIC RISK FACTORS',
-    type: 'numeric' as const,
+    type: 'mixed' as SectionType,
     fields: [
+      { key: 'name', label: 'What is your name?' },
       { key: 'age', label: 'What is your age?' },
       { key: 'sleep_hours', label: 'How many hours of sleep do you get per night on average?' },
       { key: 'exercise_days', label: 'How many days per week do you exercise (at least 30 minutes)?' },
@@ -29,7 +31,7 @@ const SECTIONS = {
   },
   2: {
     title: 'SECTION 2 — LIFESTYLE & HEALTH RISKS',
-    type: 'yesno' as const,
+    type: 'yesno' as SectionType,
     fields: [
       { key: 'smoke', label: 'Do you smoke?' },
       { key: 'drink', label: 'Do you drink alcohol regularly (at least once per week)?' },
@@ -41,7 +43,7 @@ const SECTIONS = {
   },
   3: {
     title: 'SECTION 3 — COGNITIVE EARLY SIGNS',
-    type: 'yesno' as const,
+    type: 'yesno' as SectionType,
     fields: [
       { key: 'forget_recent', label: 'Do you often forget recent conversations or events?' },
       { key: 'misplace_objects', label: 'Do you frequently misplace objects (keys, phone, wallet)?' },
@@ -54,7 +56,7 @@ const SECTIONS = {
   },
   4: {
     title: 'SECTION 4 — BEHAVIOURAL / MOOD CHANGES',
-    type: 'yesno' as const,
+    type: 'yesno' as SectionType,
     fields: [
       { key: 'mood_changes', label: 'Have you experienced sudden mood changes recently?' },
       { key: 'feel_irritable', label: 'Have you felt unusually irritable, confused, or anxious?' },
@@ -63,7 +65,8 @@ const SECTIONS = {
   },
   5: {
     title: 'SECTION 5 — DAILY FUNCTIONAL ABILITY',
-    type: 'yesno' as const,
+    type: 'yesno' as SectionType,
+
     fields: [
       { key: 'need_help_daily', label: 'Do you need help with daily tasks (shopping, bills, medicines)?' },
       { key: 'forget_meals_meds', label: 'Do you forget to eat meals or take medicine on time?' },
@@ -94,78 +97,118 @@ export default function QuestionnaireScreen() {
     });
     setAnswers(sectionAnswers);
   }, [sectionNum, currentSection.fields]);
+  
+  const isValidName = (name: string) => {
+    // Only alphabets and spaces allowed
+    return /^[A-Za-z\s]+$/.test(name.trim());
+  };
+  const validateSection = () => {
+    for (const field of currentSection.fields) {
+      const answer = answers[field.key];
+
+      // ✅ NAME validation
+      if (field.key === "name") {
+        if (!answer || answer.trim() === "") {
+          return "Please enter your name.";
+        }
+        if (!/^[A-Za-z\s]+$/.test(answer.trim())) {
+          return "Name must contain only alphabets (no numbers or symbols).";
+        }
+        continue;
+      }
+
+      // ✅ Numeric fields
+      if (currentSection.type === "numeric" || currentSection.type === "mixed") {
+        if (answer === undefined || answer === "") {
+          return `Please fill the field: ${field.label}`;
+        }
+        continue;
+      }
+
+      // ✅ Yes/No fields
+      if (answer === null || answer === undefined) {
+        return `Please answer: ${field.label}`;
+      }
+    }
+
+    return null; // ✅ no error
+  };
 
   const handleNext = async () => {
-    const allFilled = currentSection.fields.every(field => {
-      const answer = answers[field.key];
-      if (currentSection.type === 'numeric') {
-        return answer !== undefined && answer !== '';
-      }
-      return answer !== null && answer !== undefined;
-    });
+    console.log("AUTH STATE:", { isAuthenticated, username });
 
-    if (!allFilled) {
-      Alert.alert('Incomplete', 'Please answer all questions before proceeding.');
+    const error = validateSection();
+
+    // ✅ SHOW POPUP
+    if (error) {
+      Alert.alert("⚠️ Invalid Input", error);
       return;
     }
 
+    // ✅ Save answers globally
     Object.keys(answers).forEach(key => {
       globalAnswers[key] = answers[key];
     });
 
+    // ✅ Go to next section
     if (sectionNum < 5) {
       router.push(`/questionnaire/${sectionNum + 1}`);
-    } else {
-      setLoading(true);
+      return;
+    }
 
+    // ✅ Last section logic
+    if (!isAuthenticated || !username) {
+      Alert.alert("Not logged in", "Please log in before submitting the questionnaire.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
       const score = calculateRiskScore(globalAnswers);
       const category = getRiskCategory(score);
-
       const questionnaireResponse = buildQuestionnaireResponse(globalAnswers);
 
-      try {
-        if (!isAuthenticated || !username) {
-          Alert.alert("Not logged in", "Please log in before submitting the questionnaire.");
-          setLoading(false);
-          return;
-        }
+      const payload = {
+        userId: username,
+        email: `${username}@cognitosense.local`,
+        name: globalAnswers.name?.trim() || "",
+        questionnaireResponse,
+        totalScore: score,
+        targetClass:
+          category === "risk_low" ? 0 :
+          category === "risk_moderate" ? 1 :
+          category === "risk_high" ? 2 : 3,
+      };
 
-        const res = await fetch("http://192.168.1.7:4000/api/questionnaire", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: username,
-            email: `${username}@cognitosense.local`,
-            questionnaireResponse,
-            totalScore: score,
-            targetClass:
-              category === "risk_low" ? 0 :
-              category === "risk_moderate" ? 1 :
-              category === "risk_high" ? 2 : 3,
-          }),
-        });
+      console.log("📤 Sending questionnaire payload:", payload);
 
-        if (!res.ok) {
-          throw new Error("Server error");
-        }
-      } catch (error) {
-        Alert.alert(
-          "Network Error",
-          "Could not save your response. Please make sure the backend is running."
-        );
-        setLoading(false);
-        return;
-      }
+      const res = await fetch("http://192.168.1.4:4000/api/questionnaire", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      setTimeout(() => {
-        setLoading(false);
-        router.replace({
-          pathname: '/result',
-          params: { score: score.toString(), category }
-        });
-      }, 500);
+      if (!res.ok) throw new Error("API failed");
+
+      console.log("✅ Questionnaire saved successfully");
+
+      router.replace({
+        pathname: "/result",
+        params: { score: score.toString(), category },
+      });
+
+    } catch (err) {
+      console.error("❌ Questionnaire submit failed:", err);
+      Alert.alert("Error", "Failed to submit questionnaire. Check backend.");
+    } finally {
+      setLoading(false);
     }
   };
+
+
+
+
 
   const handleBack = () => {
     Object.keys(answers).forEach(key => {
@@ -195,25 +238,26 @@ export default function QuestionnaireScreen() {
 
             <Text style={styles.sectionTitle}>{currentSection.title}</Text>
 
-            {currentSection.type === 'numeric'
-              ? currentSection.fields.map((field) => (
-                  <Input
-                    key={field.key}
-                    label={field.label}
-                    value={answers[field.key]?.toString() || ''}
-                    onChangeText={(val) => updateAnswer(field.key, val)}
-                    keyboardType="numeric"
-                    placeholder="0"
-                  />
-                ))
-              : currentSection.fields.map((field) => (
-                  <RadioButton
-                    key={field.key}
-                    label={field.label}
-                    value={answers[field.key]}
-                    onChange={(val) => updateAnswer(field.key, val)}
-                  />
-                ))}
+            {currentSection.type === 'numeric' || currentSection.type === 'mixed'
+            ? currentSection.fields.map((field) => (
+                <Input
+                  key={field.key}
+                  label={field.label}
+                  value={answers[field.key]?.toString() || ''}
+                  onChangeText={(val) => updateAnswer(field.key, val)}
+                  keyboardType={field.key === 'name' ? 'default' : 'numeric'} // ✅ FIX
+                  placeholder={field.key === 'name' ? 'Enter your name' : '0'}
+                />
+              ))
+            : currentSection.fields.map((field) => (
+                <RadioButton
+                  key={field.key}
+                  label={field.label}
+                  value={answers[field.key]}
+                  onChange={(val) => updateAnswer(field.key, val)}
+                />
+              ))}
+
 
             <View style={styles.buttons}>
               {sectionNum > 1 && (
@@ -222,6 +266,9 @@ export default function QuestionnaireScreen() {
               <Button
                 title={sectionNum === 5 ? t('submit') : t('next')}
                 onPress={handleNext}
+                // onPress={() => {
+                //   console.log("SUBMIT BUTTON PRESSED");
+                // }}
                 style={{ flex: 1 }}
                 disabled={loading}
               />
@@ -369,11 +416,16 @@ function getRiskCategory(score: number): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    alignItems: "center",      // ✅ center horizontally
+    justifyContent: "center",
   },
   scrollContent: {
     padding: 20,
     paddingTop: 60,
     paddingBottom: 40,
+    width: "100%",
+    maxWidth: 650,          // ✅ controls card width
+    alignSelf: "center",
   },
   header: {
     padding: 28,

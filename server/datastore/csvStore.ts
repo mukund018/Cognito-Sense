@@ -1,12 +1,16 @@
 import fs from "fs";
 import path from "path";
+import { parse } from "csv-parse/sync";
+import { stringify } from "csv-stringify/sync";
 
 const CSV_PATH = path.join(__dirname, "../../data/cognito_sense_master.csv");
 
 const HEADERS = [
   "user_id",
   "email",
+  "name",
   "questionnaire_response",
+  "games_response",
   "q_total_score",
   "target_risk_class",
   "q_completed_at",
@@ -17,60 +21,95 @@ const HEADERS = [
 function ensureCSV() {
   if (!fs.existsSync(CSV_PATH)) {
     fs.mkdirSync(path.dirname(CSV_PATH), { recursive: true });
-    fs.writeFileSync(CSV_PATH, HEADERS.join(",") + "\n");
+    fs.writeFileSync(CSV_PATH, stringify([], { header: true, columns: HEADERS }));
   }
 }
 
-function readRows(): string[][] {
+function readRows(): any[] {
   ensureCSV();
-  const lines = fs.readFileSync(CSV_PATH, "utf-8").trim().split("\n");
-  return lines.slice(1).map((l) => l.split(","));
+  const content = fs.readFileSync(CSV_PATH, "utf-8");
+  return parse(content, {
+    columns: true,
+    skip_empty_lines: true,
+  });
 }
 
-function writeRows(rows: string[][]) {
-  const content =
-    HEADERS.join(",") + "\n" + rows.map((r) => r.join(",")).join("\n") + "\n";
-  fs.writeFileSync(CSV_PATH, content);
+function writeRows(rows: any[]) {
+  const output = stringify(rows, {
+    header: true,
+    columns: HEADERS,
+  });
+  fs.writeFileSync(CSV_PATH, output);
 }
+
+/* ================= QUESTIONNAIRE ================= */
 
 export function saveQuestionnaire(data: {
   userId: string;
   email: string;
+  name: string;
   questionnaireResponse: any;
   totalScore: number;
   targetClass: number;
 }) {
-  console.log("📝 Saving questionnaire for user:", data.userId);
-
   const rows = readRows();
-  console.log("📄 Rows before:", rows.length);
-
   const now = new Date().toISOString();
-  const idx = rows.findIndex((r) => r[0] === data.userId);
 
-  const escapedJSON = `"${JSON.stringify(data.questionnaireResponse).replace(/"/g, '""')}"`;
+  let row = rows.find((r) => r.user_id === data.userId);
 
-  if (idx === -1) {
-    console.log("➕ Creating new row");
-    const row = HEADERS.map(() => "");
-    row[0] = data.userId;
-    row[1] = data.email;
-    row[2] = escapedJSON;
-    row[3] = String(data.totalScore);
-    row[4] = String(data.targetClass);
-    row[5] = now;
-    row[6] = now;
-    row[7] = now;
+  if (!row) {
+    row = {
+      user_id: data.userId,
+      email: data.email,
+      name: data.name,
+      questionnaire_response: JSON.stringify(data.questionnaireResponse),
+      games_response: "",
+      q_total_score: data.totalScore,
+      target_risk_class: data.targetClass,
+      q_completed_at: now,
+      created_at: now,
+      last_updated: now,
+    };
     rows.push(row);
   } else {
-    console.log("✏️ Updating existing row");
-    rows[idx][2] = escapedJSON;
-    rows[idx][3] = String(data.totalScore);
-    rows[idx][4] = String(data.targetClass);
-    rows[idx][5] = now;
-    rows[idx][7] = now;
+    row.questionnaire_response = JSON.stringify(data.questionnaireResponse);
+    row.q_total_score = data.totalScore;
+    row.target_risk_class = data.targetClass;
+    row.q_completed_at = now;
+    row.last_updated = now;
   }
 
   writeRows(rows);
-  console.log("✅ CSV write complete");
+}
+
+/* ================= GAMES ================= */
+
+export function saveGameResult(params: {
+  userId: string;
+  gameKey: "laundry_sorter" | "memory_dialer" | "money_manager" | "shopping_list_recall";
+  gameResult: any;
+}) {
+  const rows = readRows();
+  const now = new Date().toISOString();
+
+  const row = rows.find((r) => r.user_id === params.userId);
+  if (!row) throw new Error("User not found");
+
+  let games = {
+    laundry_sorter: null,
+    memory_dialer: null,
+    money_manager: null,
+    shopping_list_recall: null,
+  };
+
+  if (row.games_response) {
+    games = JSON.parse(row.games_response);
+  }
+
+  games[params.gameKey] = params.gameResult;
+
+  row.games_response = JSON.stringify(games);
+  row.last_updated = now;
+
+  writeRows(rows);
 }

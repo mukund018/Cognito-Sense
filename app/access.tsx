@@ -89,11 +89,16 @@ export default function AccessScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    alignItems: "center",      // ✅ center horizontally
+    justifyContent: "center",
   },
   scrollContent: {
     padding: 20,
     paddingTop: 60,
     paddingBottom: 40,
+    width: "100%",
+    maxWidth: 650,          // ✅ controls card width
+    alignSelf: "center",
   },
   headerSection: {
     marginBottom: 24,

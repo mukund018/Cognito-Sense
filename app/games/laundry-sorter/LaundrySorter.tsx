@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useAuth } from "../../../context/AuthContext";
 
 const COLORS = ['RED', 'GREEN', 'BLUE'];
 
@@ -57,6 +58,8 @@ export default function LaundrySorter({ onBack }: { onBack?: () => void }) {
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
+  const { username, isAuthenticated } = useAuth();
+  const [gameStarted, setGameStarted] = useState(false);
 
   const logs = useRef<any[]>([]);
   const lastActionTime = useRef(Date.now());
@@ -103,8 +106,55 @@ export default function LaundrySorter({ onBack }: { onBack?: () => void }) {
   };
 
   useEffect(() => {
-    nextRound(1);
-  }, []);
+    if (gameStarted) {
+      nextRound(1);
+    }
+  }, [gameStarted]);
+
+  useEffect(() => {
+    if (finished) {
+      submitLaundrySorterResult();
+    }
+  }, [finished]);
+
+
+  async function submitLaundrySorterResult() {
+    if (!isAuthenticated || !username) {
+      console.warn("User not authenticated, skipping game logging");
+      return;
+    }
+
+    const totalAttempts = logs.current.length;
+    const accuracy =
+      totalAttempts > 0 ? correct / totalAttempts : 0;
+
+    const avgReactionTime =
+      totalAttempts > 0
+        ? logs.current.reduce((sum, log) => sum + log.reactionTime_s, 0) /
+          totalAttempts
+        : 0;
+
+    try {
+      await fetch("http://192.168.1.4:4000/api/game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: username,
+          gameKey: "laundry_sorter",
+          gameResult: {
+            total_attempts: totalAttempts,
+            correct,
+            wrong,
+            accuracy: Number(accuracy.toFixed(3)),
+            avg_reaction_time_sec: Number(avgReactionTime.toFixed(3)),
+            completed: true,
+          },
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save Laundry Sorter result", err);
+    }
+  }
 
   const handleMouseDown = (e: any) => {
     e.preventDefault();
@@ -219,23 +269,23 @@ export default function LaundrySorter({ onBack }: { onBack?: () => void }) {
     }
   }, [isDragging, cloth, rule, level, dragPos]);
 
-  const csvHeader = 'level,rule,word,inkColor,droppedOn,correct,reactionTime_s,congruent';
-  const csvRows = logs.current
-    .map((r) => `${r.level},${r.rule},${r.word},${r.inkColor},${r.droppedOn},${r.correct},${r.reactionTime_s},${r.congruent}`)
-    .join('\n');
-  const csvString = `${csvHeader}\n${csvRows}`;
+  // const csvHeader = 'level,rule,word,inkColor,droppedOn,correct,reactionTime_s,congruent';
+  // const csvRows = logs.current
+  //   .map((r) => `${r.level},${r.rule},${r.word},${r.inkColor},${r.droppedOn},${r.correct},${r.reactionTime_s},${r.congruent}`)
+  //   .join('\n');
+  // const csvString = `${csvHeader}\n${csvRows}`;
 
-  const downloadCSV = () => {
-    const blob = new Blob([csvString], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `laundry-sorter-results-${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  };
+  // const downloadCSV = () => {
+  //   const blob = new Blob([csvString], { type: 'text/csv' });
+  //   const url = window.URL.createObjectURL(blob);
+  //   const a = document.createElement('a');
+  //   a.href = url;
+  //   a.download = `laundry-sorter-results-${new Date().toISOString().slice(0,10)}.csv`;
+  //   document.body.appendChild(a);
+  //   a.click();
+  //   document.body.removeChild(a);
+  //   window.URL.revokeObjectURL(url);
+  // };
 
   const totalAttempts = logs.current.length;
   const accuracy = totalAttempts > 0 ? ((correct / totalAttempts) * 100).toFixed(1) : '0';
@@ -385,7 +435,7 @@ export default function LaundrySorter({ onBack }: { onBack?: () => void }) {
             </div>
           </div>
           
-          {/* Download Button */}
+          {/* Download Button
           <button
             onClick={downloadCSV}
             style={{
@@ -413,252 +463,264 @@ export default function LaundrySorter({ onBack }: { onBack?: () => void }) {
             }}
           >
             📥 Download CSV Results
-          </button>
+          </button> */}
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      backgroundImage: 'url("https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1600")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundBlendMode: 'multiply',
-      padding: '20px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      userSelect: 'none',
-      touchAction: 'none',
-      position: 'relative',
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        backgroundImage:
+          'url("https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1600")',
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundBlendMode: "multiply",
+        padding: "20px",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        userSelect: "none",
+        touchAction: "none",
+        position: "relative",
+      }}
+    >
       {onBack && (
         <button
           onClick={onBack}
           style={{
-            position: 'fixed',
-            top: '20px',
-            left: '20px',
-            padding: '12px 24px',
-            fontSize: '18px',
-            fontWeight: 'bold',
-            color: 'white',
-            background: 'rgba(0, 0, 0, 0.4)',
-            border: '3px solid rgba(255, 255, 255, 0.6)',
-            borderRadius: '15px',
-            cursor: 'pointer',
-            backdropFilter: 'blur(10px)',
-            transition: 'all 0.3s',
+            position: "fixed",
+            top: "20px",
+            left: "20px",
+            padding: "12px 24px",
+            fontSize: "18px",
+            fontWeight: "bold",
+            color: "white",
+            background: "rgba(0, 0, 0, 0.4)",
+            border: "3px solid rgba(255, 255, 255, 0.6)",
+            borderRadius: "15px",
+            cursor: "pointer",
+            backdropFilter: "blur(10px)",
+            transition: "all 0.3s",
             zIndex: 1000,
-            boxShadow: '0 8px 20px rgba(0,0,0,0.3)',
+            boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
           }}
         >
           ← Main Menu
         </button>
       )}
-      
-      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '48px', color: 'white', margin: '0 0 10px 0', textShadow: '3px 3px 6px rgba(0,0,0,0.4)', fontWeight: '900' }}>
-            🧺 Laundry Sorter
-          </h1>
-          <div style={{
-            background: 'rgba(255,255,255,0.25)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '15px',
-            padding: '15px 25px',
-            display: 'inline-block',
-            border: '3px solid rgba(255,255,255,0.4)',
-            boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
-          }}>
-            <p style={{ color: 'white', fontSize: '22px', margin: 0, fontWeight: '900' }}>
-              Level {level} / 5 • Match by {rule === 'WORD' ? '📝 WORD' : '🎨 COLOR'}
-            </p>
-          </div>
-        </div>
 
-        <div style={{
-          background: 'rgba(255,255,255,0.25)',
-          borderRadius: '20px',
-          padding: '20px',
-          marginBottom: '25px',
-          backdropFilter: 'blur(10px)',
-          border: '3px solid rgba(255,255,255,0.4)',
-          boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
-        }}>
-          <p style={{ color: 'white', textAlign: 'center', lineHeight: '1.8', margin: 0, fontSize: '18px', fontWeight: '600' }}>
-            {rule === 'WORD' ? (
-              <>📝 The word says "<strong>{cloth?.word}</strong>" - Drag to the <strong>{cloth?.word}</strong> zone!</>
-            ) : (
-              <>🎨 The ink color is <strong style={{color: COLOR_MAP[cloth?.color], textShadow: '1px 1px 2px rgba(0,0,0,0.8)'}}>{cloth?.color}</strong> - Drag to the <strong>{cloth?.color}</strong> zone!</>
-            )}
-          </p>
-        </div>
-
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '40px',
-          marginBottom: '25px',
-        }}>
-          <div style={{
-            background: 'rgba(46, 213, 115, 0.3)',
-            backdropFilter: 'blur(10px)',
-            padding: '12px 28px',
-            borderRadius: '15px',
-            border: '3px solid rgba(46, 213, 115, 0.6)',
-            boxShadow: '0 8px 20px rgba(46, 213, 115, 0.3)',
-          }}>
-            <span style={{ color: 'white', fontSize: '24px', fontWeight: '900' }}>✅ {correct}</span>
-          </div>
-          <div style={{
-            background: 'rgba(231, 76, 60, 0.3)',
-            backdropFilter: 'blur(10px)',
-            padding: '12px 28px',
-            borderRadius: '15px',
-            border: '3px solid rgba(231, 76, 60, 0.6)',
-            boxShadow: '0 8px 20px rgba(231, 76, 60, 0.3)',
-          }}>
-            <span style={{ color: 'white', fontSize: '24px', fontWeight: '900' }}>❌ {wrong}</span>
-          </div>
-        </div>
-
-        {debugInfo && (
-          <div style={{
-            background: debugInfo.result.includes('CORRECT') 
-              ? 'rgba(46, 213, 115, 0.3)' 
-              : 'rgba(255, 71, 87, 0.3)',
-            borderRadius: '20px',
-            padding: '20px',
-            marginBottom: '25px',
-            backdropFilter: 'blur(10px)',
-            border: `3px solid ${debugInfo.result.includes('CORRECT') ? 'rgba(46, 213, 115, 0.6)' : 'rgba(255, 71, 87, 0.6)'}`,
-            boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
-          }}>
-            <p style={{ color: 'white', margin: '5px 0', fontSize: '18px', fontWeight: '700' }}>
-              {debugInfo.result}
-            </p>
-          </div>
-        )}
-
-        {/* DROP ZONES */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-around',
-          marginBottom: '80px',
-          gap: '20px',
-        }}>
-          {COLORS.map((color) => (
-            <div
-              key={color}
-              ref={(el) => (zoneRefs.current[color] = el)}
-              style={{
-                width: '200px',
-                height: '180px',
-                backgroundColor: COLOR_MAP[color],
-                borderRadius: '25px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 12px 30px rgba(0,0,0,0.4)',
-                border: '5px solid rgba(255,255,255,0.4)',
-                transition: 'transform 0.2s',
-                transform: showFeedback === 'correct' && 
-                           ((rule === 'WORD' && cloth?.word === color) || 
-                            (rule === 'COLOR' && cloth?.color === color)) 
-                           ? 'scale(1.15)' : 'scale(1)',
-              }}
-            >
-              <span style={{ 
-                color: 'white', 
-                fontSize: '36px', 
-                fontWeight: '900', 
-                textShadow: '3px 3px 6px rgba(0,0,0,0.6)',
-                letterSpacing: '2px',
-              }}>
-                {color}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* DRAGGABLE CARD */}
-        {cloth && (
-          <div
-            ref={cardRef}
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleMouseDown}
+      <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+        {/* TITLE */}
+        <div style={{ textAlign: "center", marginBottom: "20px" }}>
+          <h1
             style={{
-              width: '140px',
-              height: '140px',
-              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-              borderRadius: '25px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto',
-              cursor: isDragging ? 'grabbing' : 'grab',
-              boxShadow: '0 15px 40px rgba(0,0,0,0.5)',
-              position: 'relative',
-              transform: `translate(${dragPos.x}px, ${dragPos.y}px)`,
-              transition: isDragging ? 'none' : 'transform 0.2s',
-              border: '5px solid rgba(255,255,255,0.5)',
+              fontSize: "48px",
+              color: "white",
+              margin: "0 0 10px 0",
+              textShadow: "3px 3px 6px rgba(0,0,0,0.4)",
+              fontWeight: "900",
             }}
           >
-            <span style={{
-              fontSize: '36px',
-              fontWeight: '900',
-              color: COLOR_MAP[cloth.color],
-              textShadow: '3px 3px 6px rgba(0,0,0,0.5)',
-              letterSpacing: '2px',
-            }}>
-              {cloth.word}
-            </span>
-            <div style={{
-              marginTop: '12px',
-              padding: '8px 14px',
-              background: 'rgba(255,255,255,0.4)',
-              borderRadius: '10px',
-              border: '2px solid rgba(255,255,255,0.6)',
-            }}>
-              <span style={{ fontSize: '12px', color: 'white', fontWeight: '900' }}>
-                {rule === 'WORD' ? '📝 WORD' : '🎨 COLOR'}
-              </span>
-            </div>
-          </div>
-        )}
+            🧺 Laundry Sorter
+          </h1>
 
-        {showFeedback && (
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            fontSize: '180px',
-            color: showFeedback === 'correct' ? '#2ecc71' : '#ff4757',
-            textShadow: '6px 6px 12px rgba(0,0,0,0.6)',
-            animation: showFeedback === 'correct' ? 'bounce 0.6s' : 'shake 0.6s',
-            zIndex: 1000,
-            filter: 'drop-shadow(0 0 20px currentColor)',
-          }}>
-            {showFeedback === 'correct' ? '✓' : '✗'}
-          </div>
+          {/* START BUTTON */}
+          {!gameStarted && (
+            <div style={{ marginTop: "20px" }}>
+              <button
+                onClick={() => setGameStarted(true)}
+                style={{
+                  padding: "14px 32px",
+                  fontSize: "20px",
+                  fontWeight: "800",
+                  color: "white",
+                  background:
+                    "linear-gradient(135deg, #ff9f43 0%, #ff6b6b 100%)",
+                  border: "none",
+                  borderRadius: "14px",
+                  cursor: "pointer",
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+                }}
+              >
+                ▶ Start Game
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* GAME UI */}
+        {gameStarted && (
+          <>
+            {/* INFO BOX */}
+            <div
+              style={{
+                background: "rgba(255,255,255,0.25)",
+                borderRadius: "20px",
+                padding: "20px",
+                marginBottom: "25px",
+                backdropFilter: "blur(10px)",
+                border: "3px solid rgba(255,255,255,0.4)",
+                boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
+              }}
+            >
+              <p
+                style={{
+                  color: "white",
+                  fontSize: "22px",
+                  fontWeight: "900",
+                  textAlign: "center",
+                }}
+              >
+                Level {level} / 5 • Match by {rule === "WORD" ? "📝 WORD" : "🎨 COLOR"}
+              </p>
+
+              <p
+                style={{
+                  color: "white",
+                  textAlign: "center",
+                  lineHeight: "1.8",
+                  fontSize: "18px",
+                  fontWeight: "600",
+                }}
+              >
+                {rule === "WORD" ? (
+                  <>
+                    📝 The word says "<strong>{cloth?.word}</strong>" - Drag to the{" "}
+                    <strong>{cloth?.word}</strong> zone!
+                  </>
+                ) : (
+                  <>
+                    🎨 The ink color is{" "}
+                    <strong style={{ color: COLOR_MAP[cloth?.color] }}>
+                      {cloth?.color}
+                    </strong>{" "}
+                    - Drag to the <strong>{cloth?.color}</strong> zone!
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* SCORE */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "40px",
+                marginBottom: "25px",
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(46, 213, 115, 0.3)",
+                  padding: "12px 28px",
+                  borderRadius: "15px",
+                  border: "3px solid rgba(46, 213, 115, 0.6)",
+                }}
+              >
+                <span style={{ color: "white", fontSize: "24px", fontWeight: "900" }}>
+                  ✅ {correct}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "rgba(231, 76, 60, 0.3)",
+                  padding: "12px 28px",
+                  borderRadius: "15px",
+                  border: "3px solid rgba(231, 76, 60, 0.6)",
+                }}
+              >
+                <span style={{ color: "white", fontSize: "24px", fontWeight: "900" }}>
+                  ❌ {wrong}
+                </span>
+              </div>
+            </div>
+
+            {/* DROP ZONES */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-around",
+                marginBottom: "80px",
+                gap: "20px",
+              }}
+            >
+              {COLORS.map((color) => (
+                <div
+                  key={color}
+                  ref={(el) => {
+                    zoneRefs.current[color] = el;
+                  }}
+                  style={{
+                    width: "200px",
+                    height: "180px",
+                    backgroundColor: COLOR_MAP[color],
+                    borderRadius: "25px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.4)",
+                    border: "5px solid rgba(255,255,255,0.4)",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "white",
+                      fontSize: "36px",
+                      fontWeight: "900",
+                      textShadow: "3px 3px 6px rgba(0,0,0,0.6)",
+                      letterSpacing: "2px",
+                    }}
+                  >
+                    {color}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* DRAGGABLE CARD */}
+            {cloth && (
+              <div
+                ref={cardRef}
+                onMouseDown={handleMouseDown}
+                onTouchStart={handleMouseDown}
+                style={{
+                  width: "140px",
+                  height: "140px",
+                  background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                  borderRadius: "25px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto",
+                  cursor: isDragging ? "grabbing" : "grab",
+                  boxShadow: "0 15px 40px rgba(0,0,0,0.5)",
+                  position: "relative",
+                  transform: `translate(${dragPos.x}px, ${dragPos.y}px)`,
+                  transition: isDragging ? "none" : "transform 0.2s",
+                  border: "5px solid rgba(255,255,255,0.5)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "36px",
+                    fontWeight: "900",
+                    color: COLOR_MAP[cloth.color],
+                    textShadow: "3px 3px 6px rgba(0,0,0,0.5)",
+                    letterSpacing: "2px",
+                  }}
+                >
+                  {cloth.word}
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      <style>{`
-        @keyframes bounce {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); }
-          50% { transform: translate(-50%, -50%) scale(1.3); }
-        }
-        @keyframes shake {
-          0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
-          25% { transform: translate(-50%, -50%) rotate(-15deg); }
-          75% { transform: translate(-50%, -50%) rotate(15deg); }
-        }
-      `}</style>
     </div>
   );
+
 }

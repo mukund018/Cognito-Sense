@@ -25,5 +25,5 @@ const PORT = parseInt(process.env.PORT || "4000", 10);
 app.listen(PORT, "0.0.0.0", () => {
   console.log("✅ Backend running on:");
   console.log(`➡ http://localhost:${PORT}`);
-  console.log(`➡ http://10.248.232.224:${PORT}`);
+  console.log(`➡ http://74.220.56.0/24:${PORT}`);
 });

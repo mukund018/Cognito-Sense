@@ -183,7 +183,7 @@ export default function QuestionnaireScreen() {
 
       console.log("📤 Sending questionnaire payload:", payload);
 
-      const res = await fetch("http://10.248.232.224:4000/api/questionnaire", {
+      const res = await fetch("http://74.220.56.0/24:4000/api/questionnaire", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -212,7 +212,7 @@ export default function ShoppingListRecall({ onBack }: { onBack: () => void }) {
       allMetrics.current.filter(l => l.hintUses > 0).length / levels;
 
     try {
-      await fetch("http://10.248.232.224:4000/api/game", {
+      await fetch("http://74.220.56.0/24:4000/api/game", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

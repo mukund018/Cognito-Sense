@@ -1,29 +1,42 @@
 import cors from "cors";
 import express from "express";
 
-import eyeTrackingRoute from "./routes/eyeTracking";
-import gameRoutes from "./routes/game";
-import questionnaireRoute from "./routes/questionnaire";
+import eyeTrackingRoute from "./routes/eyeTracking.js";
+import gameRoutes from "./routes/game.js";
+import questionnaireRoute from "./routes/questionnaire.js";
 
 const app = express();
 
+/* ===============================
+   MIDDLEWARE
+================================ */
+
+// Allow requests from anywhere (Netlify, localhost, etc.)
 app.use(cors());
+
+// Allow JSON body parsing
 app.use(express.json());
 
-// ✅ Routes
+/* ===============================
+   ROUTES
+================================ */
+
 app.use("/api/questionnaire", questionnaireRoute);
 app.use("/api/game", gameRoutes);
 app.use("/api/eye-tracking", eyeTrackingRoute);
 
-// ✅ Health check (optional but useful)
+// Health check (VERY IMPORTANT for Render)
 app.get("/", (req, res) => {
-  res.send("✅ CognitoSense Backend is Running");
+  res.status(200).send("✅ CognitoSense Backend is Running");
 });
 
-const PORT = parseInt(process.env.PORT || "4000", 10);
+/* ===============================
+   SERVER START
+================================ */
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("✅ Backend running on:");
-  console.log(`➡ http://localhost:${PORT}`);
-  console.log(`➡ http://74.220.56.0/24:${PORT}`);
+// Render provides PORT automatically
+const PORT = process.env.PORT || 4000;
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });

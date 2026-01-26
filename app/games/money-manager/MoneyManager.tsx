@@ -127,7 +127,7 @@ export default function MoneyManager({ onBack }: { onBack?: () => void } = {}) {
     const overBudgetCount = logs.filter((l) => l.overBudget).length;
 
     try {
-      await fetch("http://192.168.1.4:4000/api/game", {
+      await fetch("http://10.248.232.224:4000/api/game", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

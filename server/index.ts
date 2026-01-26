@@ -1,9 +1,9 @@
-import express from "express";
 import cors from "cors";
+import express from "express";
 
-import questionnaireRoute from "./routes/questionnaire";
-import gameRoutes from "./routes/game";
 import eyeTrackingRoute from "./routes/eyeTracking";
+import gameRoutes from "./routes/game";
+import questionnaireRoute from "./routes/questionnaire";
 
 const app = express();
 
@@ -20,10 +20,10 @@ app.get("/", (req, res) => {
   res.send("✅ CognitoSense Backend is Running");
 });
 
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("✅ Backend running on:");
   console.log(`➡ http://localhost:${PORT}`);
-  console.log(`➡ http://192.168.1.4:${PORT}`);
+  console.log(`➡ http://10.248.232.224:${PORT}`);
 });

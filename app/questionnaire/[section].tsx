@@ -6,8 +6,8 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { RadioButton } from '../../components/RadioButton';
-import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 
 
@@ -183,7 +183,7 @@ export default function QuestionnaireScreen() {
 
       console.log("📤 Sending questionnaire payload:", payload);
 
-      const res = await fetch("http://192.168.1.4:4000/api/questionnaire", {
+      const res = await fetch("http://10.248.232.224:4000/api/questionnaire", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

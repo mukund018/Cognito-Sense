@@ -1,16 +1,16 @@
-import { useAuth } from "../../../context/AuthContext";
 import React, { useEffect, useRef, useState } from 'react';
 import Confetti from 'react-confetti';
 import {
-  FlatList,
-  Image,
-  ImageBackground,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    FlatList,
+    Image,
+    ImageBackground,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useAuth } from "../../../context/AuthContext";
 
 /* ---------------- TYPES ---------------- */
 
@@ -212,7 +212,7 @@ export default function ShoppingListRecall({ onBack }: { onBack: () => void }) {
       allMetrics.current.filter(l => l.hintUses > 0).length / levels;
 
     try {
-      await fetch("http://192.168.1.4:4000/api/game", {
+      await fetch("http://10.248.232.224:4000/api/game", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
